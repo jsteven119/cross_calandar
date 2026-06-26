@@ -1,7 +1,7 @@
 'use client'
 
 import type { GTMActivity, Conflict, GTMData } from '@/lib/types'
-import { STATUS_STYLE, RISK_STYLE, fmtDate, fmtRelTime } from '@/lib/ui'
+import { STATUS_STYLE, RISK_STYLE, TYPE_STYLE, fmtDate, fmtRelTime } from '@/lib/ui'
 
 // ─── KPI 요약 스트립 ──────────────────────────────
 export function KpiStrip({ data, conflicts, issues }: { data: GTMData; conflicts: Conflict[]; issues: GTMActivity[] }) {
@@ -18,9 +18,9 @@ export function KpiStrip({ data, conflicts, issues }: { data: GTMData; conflicts
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {cards.map(c => (
-        <div key={c.label} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
-          <p className="text-2xs text-gray-400">{c.label}</p>
-          <p className={`text-2xl font-bold ${c.tone}`}>{c.value}</p>
+        <div key={c.label} className="bg-white border border-gray-200 rounded-lg px-4 py-3.5">
+          <p className="text-xs text-gray-400">{c.label}</p>
+          <p className={`text-3xl font-bold mt-0.5 ${c.tone}`}>{c.value}</p>
         </div>
       ))}
     </div>
@@ -112,6 +112,66 @@ export function ChangeFeed({ changes, onSelect }: { changes: GTMActivity[]; onSe
             </div>
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── 전체 활동 목록 (타임라인 하단 리스트 뷰) ──────────────
+export function ActivityTable({ activities, onSelect }: { activities: GTMActivity[]; onSelect: (a: GTMActivity) => void }) {
+  const sorted = [...activities].sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0))
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+        <span className="text-gray-500">📋</span>
+        <h3 className="text-sm font-bold text-gray-800">전체 활동 목록</h3>
+        <span className="ml-auto text-xs bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{sorted.length}건</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-gray-50 text-gray-400 text-left">
+              <th className="font-medium px-3 py-2">권역</th>
+              <th className="font-medium px-3 py-2">상품</th>
+              <th className="font-medium px-3 py-2">활동명</th>
+              <th className="font-medium px-3 py-2">유형</th>
+              <th className="font-medium px-3 py-2 whitespace-nowrap">기간</th>
+              <th className="font-medium px-3 py-2">상태</th>
+              <th className="font-medium px-3 py-2">담당</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sorted.length === 0 && (
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">표시할 활동이 없습니다</td></tr>
+            )}
+            {sorted.map(a => {
+              const st = STATUS_STYLE[a.status]
+              const type = TYPE_STYLE[a.type] ?? 'bg-gray-400'
+              return (
+                <tr key={a.id} onClick={() => onSelect(a)} className="hover:bg-gray-50 cursor-pointer">
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{a.region}</td>
+                  <td className="px-3 py-2 font-medium text-gray-700 whitespace-nowrap">
+                    {a.hero && <span className="text-pink-500 mr-0.5">★</span>}{a.product}
+                  </td>
+                  <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">
+                    {a.title}
+                    {a.issue && <span className="text-red-400 ml-1">⚠</span>}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className={`inline-flex items-center gap-1 text-gray-500`}>
+                      <span className={`w-2 h-2 rounded-sm ${type}`} />{a.type}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(a.startDate)}~{fmtDate(a.endDate)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className={`text-2xs rounded-full px-2 py-0.5 ${st.bg} ${st.text}`}>{a.status}</span>
+                  </td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{a.owner}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )

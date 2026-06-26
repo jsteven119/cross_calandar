@@ -10,8 +10,8 @@
 
 @layer utilities {
   .text-2xs {
-    font-size: 0.65rem;
-    line-height: 1rem;
+    font-size: 0.72rem;
+    line-height: 1.05rem;
   }
   .line-clamp-2 {
     display: -webkit-box;

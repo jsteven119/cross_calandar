@@ -5,7 +5,7 @@ import type { GTMData, GTMActivity } from '@/lib/types'
 import { detectConflicts, collectIssues, recentChanges } from '@/lib/conflicts'
 import { SwimlaneTimeline } from './SwimlaneTimeline'
 import { Filters, FilterState, emptyFilter } from './Filters'
-import { KpiStrip, ConflictPanel, IssueBoard, ChangeFeed, DetailDrawer } from './Panels'
+import { KpiStrip, ConflictPanel, IssueBoard, ChangeFeed, DetailDrawer, ActivityTable } from './Panels'
 
 export function GTMDashboard({ data, lastRefreshed }: { data: GTMData; lastRefreshed: Date }) {
   const [filter, setFilter] = useState<FilterState>(emptyFilter())
@@ -32,11 +32,11 @@ export function GTMDashboard({ data, lastRefreshed }: { data: GTMData; lastRefre
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-gray-800">{data.title}</h1>
-          <p className="text-2xs text-gray-400">{data.year}년 · 전 권역 통합 뷰</p>
+          <h1 className="text-2xl font-bold text-gray-800">{data.title}</h1>
+          <p className="text-xs text-gray-400 mt-0.5">{data.year}년 · 전 권역 통합 뷰</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-2xs text-gray-400">
+          <span className="text-xs text-gray-400">
             {lastRefreshed.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
           <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
@@ -64,13 +64,14 @@ export function GTMDashboard({ data, lastRefreshed }: { data: GTMData; lastRefre
 
       {/* 메인: 타임라인 + 사이드 패널 */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2">
+        <div className="xl:col-span-2 space-y-4">
           <SwimlaneTimeline
             data={data}
             activities={filtered}
             highlightProduct={filter.product}
             onSelect={setSelected}
           />
+          <ActivityTable activities={filtered} onSelect={setSelected} />
         </div>
         <div className="space-y-4">
           <ConflictPanel conflicts={conflicts} onPick={p => setFilter({ ...filter, product: p })} />
