@@ -5,9 +5,9 @@ import type { GTMData, GTMActivity } from '@/lib/types'
 import { detectConflicts, collectIssues, recentChanges } from '@/lib/conflicts'
 import { SwimlaneTimeline } from './SwimlaneTimeline'
 import { Filters, FilterState, emptyFilter } from './Filters'
-import { KpiStrip, AlertsPanel, DetailDrawer, ActivityTable, ECPromotionBoard } from './Panels'
+import { KpiStrip, AlertsPanel, DetailDrawer, ActivityTable } from './Panels'
 import { SeedingBoard } from './SeedingBoard'
-import { LaunchCalendar } from './LaunchCalendar'
+import { MonthMatrix } from './MonthMatrix'
 
 export function GTMDashboard({ data, lastRefreshed }: { data: GTMData; lastRefreshed: Date }) {
   const [filter, setFilter] = useState<FilterState>(emptyFilter())
@@ -40,6 +40,11 @@ export function GTMDashboard({ data, lastRefreshed }: { data: GTMData; lastRefre
     return s
   })()
   const isSample = data.title.includes('샘플')
+
+  // 유형별 분리: 출시 / EC 프로모션 / 프로모션 마케팅
+  const launches = filtered.filter(a => a.type === '신제품출시' || a.type === '리뉴얼')
+  const promos = filtered.filter(a => a.type === '프로모션' || a.type === '채널행사')
+  const marketing = filtered.filter(a => a.type === '캠페인')
 
   return (
     <div className="max-w-[1800px] mx-auto px-4 py-4 space-y-4">
@@ -94,7 +99,7 @@ export function GTMDashboard({ data, lastRefreshed }: { data: GTMData; lastRefre
           )}
         </aside>
 
-        {/* 우측 콘텐츠 영역 — 처음 보는 사람 기준 순서: 전체 일정 → 신상품 → EC행사 → 시딩 → 상세 */}
+        {/* 우측 콘텐츠 — 첫 사용자 기준 순서: 전체 일정 → 신상품 → EC프로모션 → 마케팅 → 시딩 → 상세 */}
         <div className="flex-1 min-w-0 space-y-4">
           {/* 1) 메인 타임라인 = 전체 일정 한 눈에 (핵심 뷰) */}
           <SwimlaneTimeline
@@ -104,13 +109,16 @@ export function GTMDashboard({ data, lastRefreshed }: { data: GTMData; lastRefre
             onSelect={setSelected}
           />
 
-          {/* 2) 월별 신상품 출시 */}
-          <LaunchCalendar activities={filtered} onSelect={setSelected} />
+          {/* 2) 신상품 출시 — 브랜드별 가로 월간 */}
+          <MonthMatrix title="신상품 출시 (브랜드별 월간)" icon="🆕" activities={launches} rowMode="brand" onSelect={setSelected} />
 
-          {/* 3) EC 채널 프로모션 보드 */}
-          <ECPromotionBoard regions={data.regions} activities={filtered} onSelect={setSelected} />
+          {/* 3) EC 프로모션 — 브랜드·국가별 월간 (프로모션/채널행사만) */}
+          <MonthMatrix title="EC 프로모션 (브랜드·국가별 월간)" icon="🛒" activities={promos} rowMode="brand-region" onSelect={setSelected} />
 
-          {/* 4) 인플루언서 시딩 스케줄 */}
+          {/* 4) 프로모션 마케팅 — 캠페인만 (프로모션과 분리) */}
+          <MonthMatrix title="프로모션 마케팅 (브랜드·국가별 월간)" icon="📣" activities={marketing} rowMode="brand-region" onSelect={setSelected} />
+
+          {/* 5) 인플루언서 시딩 스케줄 */}
           <SeedingBoard />
 
           {/* 활동 목록 + 알림 패널 */}

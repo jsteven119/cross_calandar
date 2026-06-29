@@ -266,13 +266,18 @@ export function ECPromotionBoard({ regions, activities, onSelect }: { regions: R
 
 // ─── 전체 활동 목록 (타임라인 하단 리스트 뷰) ──────────────
 export function ActivityTable({ activities, onSelect }: { activities: GTMActivity[]; onSelect: (a: GTMActivity) => void }) {
+  const LIMIT = 30
+  const [expanded, setExpanded] = useState(false)
   const sorted = [...activities].sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0))
+  const shown = expanded ? sorted : sorted.slice(0, LIMIT)
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
       <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
         <span className="text-gray-500">📋</span>
         <h3 className="text-sm font-bold text-gray-800">전체 활동 목록</h3>
-        <span className="ml-auto text-xs bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{sorted.length}건</span>
+        <span className="ml-auto text-xs bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">
+          {sorted.length > LIMIT && !expanded ? `${LIMIT} / ${sorted.length}건` : `${sorted.length}건`}
+        </span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -292,7 +297,7 @@ export function ActivityTable({ activities, onSelect }: { activities: GTMActivit
             {sorted.length === 0 && (
               <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">표시할 활동이 없습니다</td></tr>
             )}
-            {sorted.map(a => {
+            {shown.map(a => {
               const st = STATUS_STYLE[a.status]
               const type = TYPE_STYLE[a.type] ?? 'bg-gray-400'
               return (
@@ -322,6 +327,14 @@ export function ActivityTable({ activities, onSelect }: { activities: GTMActivit
           </tbody>
         </table>
       </div>
+      {sorted.length > LIMIT && (
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="w-full py-2 text-2xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-t border-gray-100"
+        >
+          {expanded ? '접기 ▲' : `전체 ${sorted.length}건 보기 ▼`}
+        </button>
+      )}
     </div>
   )
 }
