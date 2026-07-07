@@ -6,14 +6,14 @@ function overlap(aStart: string, aEnd: string, bStart: string, bEnd: string): [s
   return s <= e ? [s, e] : null
 }
 
-// 같은 상품이 서로 다른 권역에서 기간이 겹치면 충돌로 표시.
+// 같은 제품이 서로 다른 권역에서 기간이 겹치면 충돌로 표시.
 // (글로벌 동시 푸시일 수도, 자기잠식일 수도 — 사람이 판단하도록 노출)
 export function detectConflicts(activities: GTMActivity[]): Conflict[] {
   const live = activities.filter(
     a => a.status !== '취소' && a.product && a.startDate && a.endDate
   )
 
-  // 상품명 기준 그룹
+  // 제품명 기준 그룹
   const byProduct = new Map<string, GTMActivity[]>()
   for (const a of live) {
     const key = a.product.trim()
@@ -59,20 +59,4 @@ export function detectConflicts(activities: GTMActivity[]): Conflict[] {
   }
 
   return conflicts
-}
-
-// 이슈 있는 활동을 심각도순으로
-export function collectIssues(activities: GTMActivity[]): GTMActivity[] {
-  const order: Record<string, number> = { 상: 0, 중: 1, 하: 2, '': 3 }
-  return activities
-    .filter(a => a.issue && a.issue.trim() && a.status !== '취소')
-    .sort((x, y) => (order[x.riskLevel] ?? 9) - (order[y.riskLevel] ?? 9))
-}
-
-// 최근 변경 흐름 (updatedAt 내림차순)
-export function recentChanges(activities: GTMActivity[], limit = 12): GTMActivity[] {
-  return [...activities]
-    .filter(a => a.updatedAt)
-    .sort((x, y) => (y.updatedAt > x.updatedAt ? 1 : -1))
-    .slice(0, limit)
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import type { GTMActivity } from '@/lib/types'
-import { TYPE_STYLE, category } from '@/lib/ui'
+import { TYPE_STYLE, TYPE_ORDER, category } from '@/lib/ui'
 
 const BRAND_COLOR: Record<string, string> = {
   바이오힐보: '#7C3AED', 웨이크메이크: '#DC2626', 컬러그램: '#DB2777',
@@ -44,7 +44,7 @@ export function BrandMatrix({ activities, onSelect }: { activities: GTMActivity[
         <span className="ml-auto text-xs bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{acts.length}건</span>
         {/* 유형 범례 */}
         <div className="w-full flex items-center gap-3 text-2xs text-gray-400 mt-0.5">
-          {(['프로모션', '바이럴', '신상품', '상시'] as const).map(t => (
+          {TYPE_ORDER.map(t => (
             <span key={t} className="inline-flex items-center gap-1">
               <span className={`w-2 h-2 rounded-sm ${TYPE_STYLE[t] ?? 'bg-gray-400'}`} />{t}
             </span>

@@ -1,267 +1,172 @@
 'use client'
 
 import { useState } from 'react'
-import type { GTMActivity, Conflict, GTMData, Region } from '@/lib/types'
-import { STATUS_STYLE, RISK_STYLE, TYPE_STYLE, fmtDate, fmtRelTime, category, CATEGORY_STYLE, fromMonthKey, intersectsMonth, parseYMD } from '@/lib/ui'
+import type { GTMActivity, Conflict, ChangeLogEntry } from '@/lib/types'
+import { REGIONS } from '@/lib/types'
+import {
+  STATUS_STYLE, TYPE_STYLE, fmtDate, fmtRelTime, fmtYearMonth,
+  category, CATEGORY_STYLE, fromMonthKey, intersectsMonth, parseYMD,
+} from '@/lib/ui'
 
-// ─── KPI 요약 스트립 ──────────────────────────────
-export function KpiStrip({ data, conflicts }: { data: GTMData; conflicts: Conflict[] }) {
-  const live = data.activities.filter(a => a.status === '진행중').length
-  const heroLaunch = data.activities.filter(a => a.hero && a.type === '신상품' && a.status !== '취소').length
-  // 바이럴 건수 = 바이럴 활동들의 건수 합 (시딩/포스팅/인플루언서 수)
-  const viralCount = data.activities
-    .filter(a => a.type === '바이럴')
-    .reduce((s, a) => s + (parseInt(String(a.count).replace(/[^\d]/g, ''), 10) || 0), 0)
+// ─── KPI 요약 스트립 (수치 + 해석 1줄 병기) ──────────────────────────────
+// 회사 필수 룰: 모든 카드에 "의미 · 왜 중요 · 액션 힌트"를 함께 노출.
+function daysUntil(endDate: string): number | null {
+  const p = parseYMD(endDate)
+  if (!p) return null
+  const end = new Date(p.y, p.m - 1, p.d).getTime()
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  return Math.round((end - today) / 86400000)
+}
+
+export function KpiStrip({ activities, cursor, conflicts }: { activities: GTMActivity[]; cursor: number; conflicts: Conflict[] }) {
+  const { m: curM } = fromMonthKey(cursor)
+  const monthActs = activities.filter(a => intersectsMonth(a, cursor))
+  const total = monthActs.length
+
+  const newLaunch = monthActs.filter(a => a.type === '신상품' && a.status !== '취소').length
+  const imminent = activities.filter(a => {
+    if (a.status === '완료' || a.status === '취소') return false
+    const d = daysUntil(a.endDate)
+    return d !== null && d >= 0 && d <= 7
+  }).length
+  const planning = monthActs.filter(a => a.status === '기획').length
+  const planningPct = total ? Math.round((planning / total) * 100) : 0
+  const coverage = REGIONS.filter(r => monthActs.some(a => a.region === r)).length
+  const gapRegions = REGIONS.filter(r => !monthActs.some(a => a.region === r))
 
   const cards = [
-    { label: '진행중 활동', value: live, tone: 'text-green-600' },
-    { label: '주력 런칭', value: heroLaunch, tone: 'text-pink-600' },
-    { label: '바이럴 건수', value: viralCount, tone: viralCount ? 'text-rose-600' : 'text-gray-400' },
-    { label: '상품 충돌', value: conflicts.length, tone: conflicts.length ? 'text-orange-600' : 'text-gray-400' },
+    {
+      label: `당월 활동수 (${curM}월)`, value: total, unit: '건',
+      tone: total ? 'text-gray-800' : 'text-gray-400',
+      note: total ? '권역·브랜드 합산 진행·예정. 아래 간트에서 기간 겹침 확인' : '이달 등록 활동 없음 — 입력 누락 또는 비수기. 담당팀 확인',
+    },
+    {
+      label: '당월 신상품 출시', value: newLaunch, unit: '건',
+      tone: newLaunch ? 'text-blue-600' : 'text-gray-400',
+      note: newLaunch ? '신제품 인지 집중 구간 — 주력이면 시딩·매체 지원 확인' : '이달 런칭 0건 — 신제품 파이프라인 공백 여부 점검',
+    },
+    {
+      label: '임박 (종료 D-7·미완료)', value: imminent, unit: '건',
+      tone: imminent ? 'text-rose-600' : 'text-gray-400',
+      note: imminent ? '7일 내 종료 예정 미완료 — 마감 성과·정산 누락 위험. 최종 점검' : '임박 마감 없음 — 여유 있음',
+    },
+    {
+      label: '상태미정 비율 (기획)', value: planningPct, unit: '%',
+      tone: planningPct >= 50 ? 'text-amber-600' : 'text-gray-800',
+      note: planningPct >= 50 ? `당월 ${planning}건이 기획 단계 — 실행 확정 지연. 확정 전환 독려` : '대부분 확정·진행 — 실행 안정권',
+    },
+    {
+      label: '권역 커버리지', value: coverage, unit: '/4',
+      tone: coverage === 4 ? 'text-green-600' : 'text-amber-600',
+      note: coverage === 4 ? '4개 권역 모두 이달 활동 보유 — 공유 사각지대 없음' : `공백: ${gapRegions.join('·')} — 공유 사각지대. 담당자 확인`,
+    },
   ]
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
       {cards.map(c => (
-        <div key={c.label} className="bg-white border border-gray-200 rounded-lg px-4 py-3.5">
+        <div key={c.label} className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex flex-col">
           <p className="text-xs text-gray-400">{c.label}</p>
-          <p className={`text-3xl font-bold mt-0.5 ${c.tone}`}>{c.value}</p>
+          <p className={`text-3xl font-bold mt-0.5 ${c.tone}`}>
+            {c.value}<span className="text-base font-medium text-gray-300 ml-0.5">{c.unit}</span>
+          </p>
+          <p className="text-2xs text-gray-400 mt-1.5 leading-snug">{c.note}</p>
         </div>
       ))}
     </div>
   )
 }
 
-// ─── 알림·모니터링 통합 패널 (탭) ──────────────────────────────
-interface AlertsPanelProps {
+// ─── 변경/충돌 통합 패널 (탭 전환) — "실시간 변동 공유" 핵심 UI ──────────────
+export function ChangeFeed({
+  changeLog, conflicts, onPick, onSelect,
+}: {
+  changeLog: ChangeLogEntry[]
   conflicts: Conflict[]
-  issues: GTMActivity[]
-  changes: GTMActivity[]
   onPick: (product: string) => void
   onSelect: (a: GTMActivity) => void
-}
-
-export function AlertsPanel({ conflicts, issues, changes, onPick, onSelect }: AlertsPanelProps) {
-  const [tab, setTab] = useState<'conflict' | 'issue' | 'change'>('issue')
+}) {
+  const [tab, setTab] = useState<'change' | 'conflict'>('change')
+  const recent = changeLog.slice(0, 20)
 
   const tabs = [
-    {
-      id: 'conflict' as const,
-      label: '충돌',
-      icon: '⚡',
-      count: conflicts.length,
-      activeColor: 'border-orange-500 text-orange-600',
-      badgeColor: conflicts.length ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-400',
-    },
-    {
-      id: 'issue' as const,
-      label: '이슈',
-      icon: '⚠',
-      count: issues.length,
-      activeColor: 'border-red-500 text-red-600',
-      badgeColor: issues.length ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-400',
-    },
-    {
-      id: 'change' as const,
-      label: '변경',
-      icon: '↻',
-      count: changes.length,
-      activeColor: 'border-blue-500 text-blue-600',
-      badgeColor: 'bg-blue-100 text-blue-700',
-    },
+    { id: 'change' as const, label: '변경', icon: '↻', count: changeLog.length, active: 'border-blue-500 text-blue-600', badge: 'bg-blue-100 text-blue-700' },
+    { id: 'conflict' as const, label: '충돌', icon: '⚡', count: conflicts.length, active: 'border-orange-500 text-orange-600', badge: conflicts.length ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-400' },
   ]
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-      {/* 탭 헤더 */}
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
       <div className="flex border-b border-gray-200 bg-gray-50/60">
         {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-all border-b-2
-              ${tab === t.id
-                ? `bg-white ${t.activeColor}`
-                : 'border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-100/60'
-              }`}
-          >
-            <span>{t.icon}</span>
-            <span>{t.label}</span>
-            <span className={`text-2xs rounded-full px-1.5 py-0.5 font-semibold ${t.badgeColor}`}>
-              {t.count}
-            </span>
+              ${tab === t.id ? `bg-white ${t.active}` : 'border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-100/60'}`}>
+            <span>{t.icon}</span><span>{t.label}</span>
+            <span className={`text-2xs rounded-full px-1.5 py-0.5 font-semibold ${t.badge}`}>{t.count}</span>
           </button>
         ))}
       </div>
 
-      {/* 탭 콘텐츠 */}
-      <div className="max-h-80 overflow-y-auto">
-        {/* 충돌 탭 */}
-        {tab === 'conflict' && (
-          <>
-            {conflicts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-300">
-                <span className="text-3xl">✓</span>
-                <p className="text-xs text-gray-400">겹치는 주력상품 일정 없음</p>
-              </div>
-            ) : conflicts.map(c => (
-              <button
-                key={c.product}
-                onClick={() => onPick(c.product)}
-                className="w-full text-left px-4 py-3 hover:bg-orange-50 transition-colors border-b border-gray-50 last:border-b-0 group"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-800 group-hover:text-orange-700 transition-colors">{c.product}</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {c.regions.map(r => (
-                        <span key={r} className="text-2xs bg-orange-50 text-orange-600 border border-orange-100 rounded-full px-2 py-0.5">{r}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <span className="text-2xs text-orange-500 shrink-0 mt-0.5 font-medium">{fmtDate(c.overlapStart)}~{fmtDate(c.overlapEnd)}</span>
-                </div>
-              </button>
-            ))}
-          </>
-        )}
+      {/* 읽는 법 */}
+      <div className="px-4 py-1.5 bg-gray-50/40 border-b border-gray-50">
+        <p className="text-2xs text-gray-400">
+          {tab === 'change'
+            ? '시트 셀 변경 실시간 피드 — 다른 팀이 무엇을 바꿨는지 즉시 공유. 최신 20건'
+            : '같은 제품이 다른 권역에서 기간 겹침 — 글로벌 동시 푸시 or 자기잠식. 클릭 시 해당 제품만 필터'}
+        </p>
+      </div>
 
-        {/* 이슈 탭 */}
-        {tab === 'issue' && (
-          <>
-            {issues.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <span className="text-3xl text-gray-200">✓</span>
-                <p className="text-xs text-gray-400">등록된 이슈 없음</p>
-              </div>
-            ) : issues.map(a => {
-              const risk = RISK_STYLE[a.riskLevel] ?? RISK_STYLE['하']
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => onSelect(a)}
-                  className="w-full text-left px-4 py-3 hover:bg-red-50/60 transition-colors border-b border-gray-50 last:border-b-0 group"
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-2xs font-bold rounded-full px-2 py-0.5 shrink-0 ${risk.bg} ${risk.text}`}>{risk.label}</span>
-                    <span className="text-2xs text-gray-400 shrink-0">{a.region} · {a.brand}</span>
-                    {a.hero && <span className="text-2xs text-pink-500 shrink-0">★</span>}
-                  </div>
-                  <p className="text-xs font-medium text-gray-700 truncate group-hover:text-red-700 transition-colors">{a.product}</p>
-                  <p className="text-2xs text-gray-400 mt-0.5 truncate">{a.issue}</p>
-                </button>
-              )
-            })}
-          </>
-        )}
-
-        {/* 변경 탭 */}
+      <div className="max-h-96 overflow-y-auto">
         {tab === 'change' && (
-          <>
-            {changes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <span className="text-3xl text-gray-200">↻</span>
-                <p className="text-xs text-gray-400">최근 변경 없음</p>
+          recent.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <span className="text-3xl text-gray-200">↻</span>
+              <p className="text-xs text-gray-400">변경 기록 없음 · _변경로그 탭 미입력</p>
+            </div>
+          ) : recent.map((c, i) => (
+            <div key={i} className="px-4 py-2.5 border-b border-gray-50 last:border-b-0">
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-2xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">{c.tab || '—'}</span>
+                  <span className="text-2xs font-medium text-gray-700 truncate max-w-[160px]">{c.rowKey}</span>
+                </span>
+                <span className="text-2xs text-gray-400 shrink-0">{fmtRelTime(c.at) || c.at}</span>
               </div>
-            ) : changes.map(a => {
-              const st = STATUS_STYLE[a.status]
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => onSelect(a)}
-                  className="w-full text-left px-4 py-3 hover:bg-blue-50/50 transition-colors border-b border-gray-50 last:border-b-0 group"
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-2xs text-gray-400">{a.region} · {a.brand}</span>
-                    <span className="text-2xs text-gray-400 shrink-0">{fmtRelTime(a.updatedAt)}</span>
-                  </div>
-                  <p className="text-xs font-medium text-gray-700 truncate group-hover:text-blue-700 transition-colors">{a.title}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`text-2xs rounded-full px-2 py-0.5 ${st.bg} ${st.text}`}>{a.status}</span>
-                    {a.updatedBy && <span className="text-2xs text-gray-400">by {a.updatedBy}</span>}
-                  </div>
-                </button>
-              )
-            })}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── (레거시 export — GTMDashboard 외부 사용 시 호환용) ─────────
-export function ConflictPanel({ conflicts, onPick }: { conflicts: Conflict[]; onPick: (product: string) => void }) {
-  return <AlertsPanel conflicts={conflicts} issues={[]} changes={[]} onPick={onPick} onSelect={() => {}} />
-}
-export function IssueBoard({ issues, onSelect }: { issues: GTMActivity[]; onSelect: (a: GTMActivity) => void }) {
-  return <AlertsPanel conflicts={[]} issues={issues} changes={[]} onPick={() => {}} onSelect={onSelect} />
-}
-export function ChangeFeed({ changes, onSelect }: { changes: GTMActivity[]; onSelect: (a: GTMActivity) => void }) {
-  return <AlertsPanel conflicts={[]} issues={[]} changes={changes} onPick={() => {}} onSelect={onSelect} />
-}
-
-// ─── 권역별 EC 프로모션 보드 (권역 × EC채널 정리) ──────────────
-export function ECPromotionBoard({ regions, activities, onSelect }: { regions: Region[]; activities: GTMActivity[]; onSelect: (a: GTMActivity) => void }) {
-  // 프로모션성 활동만 (프로모션/채널행사/캠페인/신제품출시)
-  const PROMO_TYPES = new Set(['프로모션', '채널행사', '캠페인', '신제품출시'])
-  const promo = activities.filter(a => PROMO_TYPES.has(a.type))
-
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg">
-      <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
-        <span className="text-purple-500">🛒</span>
-        <h3 className="text-sm font-bold text-gray-800">권역별 EC 프로모션</h3>
-        <span className="ml-auto text-xs bg-purple-100 text-purple-700 rounded-full px-2 py-0.5">{promo.length}건</span>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 divide-y xl:divide-y-0 xl:divide-x divide-gray-100">
-        {regions.map(region => {
-          const regionActs = promo.filter(a => a.region === region.name)
-          // EC 채널별 그룹화
-          const byChannel = new Map<string, GTMActivity[]>()
-          regionActs.forEach(a => {
-            const ch = a.channel || '기타'
-            if (!byChannel.has(ch)) byChannel.set(ch, [])
-            byChannel.get(ch)!.push(a)
-          })
-          const channels = Array.from(byChannel.entries())
-          return (
-            <div key={region.name} className="p-3 min-h-[120px]">
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: region.color }} />
-                <span className="text-xs font-bold text-gray-700">{region.name}</span>
-                <span className="text-2xs text-gray-400">{regionActs.length}</span>
-              </div>
-              {channels.length === 0 && <p className="text-2xs text-gray-300">예정 없음</p>}
-              <div className="space-y-2">
-                {channels.map(([ch, acts]) => (
-                  <div key={ch}>
-                    <p className="text-2xs font-semibold text-gray-500 mb-0.5">{ch}</p>
-                    <div className="space-y-1">
-                      {acts.sort((a, b) => (a.startDate < b.startDate ? -1 : 1)).map(a => (
-                        <button
-                          key={a.id}
-                          onClick={() => onSelect(a)}
-                          className="w-full text-left rounded-md border border-gray-100 hover:border-purple-300 hover:bg-purple-50 px-2 py-1.5 transition-colors"
-                        >
-                          <div className="flex items-center gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TYPE_STYLE[a.type] ?? 'bg-gray-400'}`} />
-                            {a.hero && <span className="text-pink-500 text-2xs shrink-0">★</span>}
-                            <span className="text-2xs font-medium text-gray-700 truncate">{a.title}</span>
-                            {a.issue && <span className="text-red-400 text-2xs shrink-0">⚠</span>}
-                          </div>
-                          <div className="flex items-center justify-between mt-0.5 pl-2.5">
-                            <span className="text-2xs text-gray-400">{a.brand}</span>
-                            <span className="text-2xs text-gray-400">{fmtDate(a.startDate)}~{fmtDate(a.endDate)}</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center gap-1 flex-wrap text-2xs">
+                <span className="text-gray-400">{c.column}:</span>
+                <span className="text-gray-400 line-through">{c.before || '∅'}</span>
+                <span className="text-gray-300">→</span>
+                <span className="text-blue-700 font-medium">{c.after || '∅'}</span>
+                {c.by && <span className="text-gray-300 ml-auto">by {c.by}</span>}
               </div>
             </div>
-          )
-        })}
+          ))
+        )}
+
+        {tab === 'conflict' && (
+          conflicts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <span className="text-3xl text-gray-200">✓</span>
+              <p className="text-xs text-gray-400">겹치는 제품 일정 없음</p>
+            </div>
+          ) : conflicts.map(c => (
+            <button key={c.product} onClick={() => onPick(c.product)}
+              className="w-full text-left px-4 py-3 hover:bg-orange-50 transition-colors border-b border-gray-50 last:border-b-0 group">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-gray-800 group-hover:text-orange-700">{c.product}</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {c.regions.map(r => (
+                      <span key={r} className="text-2xs bg-orange-50 text-orange-600 border border-orange-100 rounded-full px-2 py-0.5">{r}</span>
+                    ))}
+                  </div>
+                </div>
+                <span className="text-2xs text-orange-500 shrink-0 mt-0.5 font-medium">{fmtDate(c.overlapStart)}~{fmtDate(c.overlapEnd)}</span>
+              </div>
+            </button>
+          ))
+        )}
       </div>
     </div>
   )
@@ -276,7 +181,6 @@ const AT_BRAND_COLOR: Record<string, string> = {
 export function ActivityTable({ activities, cursor, onSelect }: { activities: GTMActivity[]; cursor: number; onSelect: (a: GTMActivity) => void }) {
   const { y: curY, m: curM } = fromMonthKey(cursor)
 
-  // 이번 달에 걸쳐 있는 활동만 (시작·진행·이월 포함), 브랜드별 그룹
   const monthActs = activities
     .filter(a => intersectsMonth(a, cursor))
     .sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0))
@@ -293,7 +197,6 @@ export function ActivityTable({ activities, cursor, onSelect }: { activities: GT
     (AT_BRAND_ORDER.indexOf(y.brand) < 0 ? 99 : AT_BRAND_ORDER.indexOf(y.brand))
   )
 
-  // 이월 여부 (시작이 이번 달보다 이전)
   const carriedIn = (a: GTMActivity) => { const s = parseYMD(a.startDate); return !!s && (s.y * 12 + (s.m - 1)) < cursor }
 
   return (
@@ -301,7 +204,7 @@ export function ActivityTable({ activities, cursor, onSelect }: { activities: GT
       <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
         <span className="text-gray-500">📋</span>
         <h3 className="text-sm font-bold text-gray-800">당월 활동 목록</h3>
-        <span className="text-2xs text-gray-400">{curY}년 {curM}월 · 브랜드별</span>
+        <span className="text-2xs text-gray-400">{curY}년 {curM}월 · 브랜드별 · ◀ = 전월 이월</span>
         <span className="ml-auto text-xs bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{monthActs.length}건</span>
       </div>
 
@@ -311,7 +214,6 @@ export function ActivityTable({ activities, cursor, onSelect }: { activities: GT
         <div className="divide-y divide-gray-100">
           {brands.map(b => (
             <div key={b.brand}>
-              {/* 브랜드 소제목 */}
               <div className="flex items-center gap-1.5 px-4 py-1 bg-gray-50/70">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ background: AT_BRAND_COLOR[b.brand] ?? '#94a3b8' }} />
                 <span className="text-2xs font-bold text-gray-700">{b.brand}</span>
@@ -325,30 +227,29 @@ export function ActivityTable({ activities, cursor, onSelect }: { activities: GT
                     const catSty = CATEGORY_STYLE[cat]
                     return (
                       <tr key={a.id} onClick={() => onSelect(a)} className="hover:bg-gray-50 cursor-pointer">
-                        <td className="pl-6 pr-2 py-1.5 text-gray-400 whitespace-nowrap w-10">{a.region}</td>
-                        <td className="px-2 py-1.5 whitespace-nowrap w-16">
+                        <td className="pl-6 pr-2 py-1.5 text-gray-400 whitespace-nowrap w-10 text-left">{a.region}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap w-16 text-left">
                           <span className={`text-2xs rounded px-1.5 py-0.5 ${catSty.chip}`}>{cat}</span>
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700 max-w-[260px] truncate">
+                        <td className="px-2 py-1.5 text-gray-700 max-w-[260px] truncate text-left">
                           {a.hero && <span className="text-pink-500 mr-0.5">★</span>}
                           <span className="font-medium">{a.product || a.title}</span>
                           {a.product && a.title && a.title !== a.product && <span className="text-gray-400"> · {a.title}</span>}
                           {a.count && <span className="text-rose-500 text-2xs ml-1 font-semibold">×{a.count}</span>}
-                          {a.issue && <span className="text-red-400 ml-1">⚠</span>}
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap">
+                        <td className="px-2 py-1.5 whitespace-nowrap text-left">
                           <span className="inline-flex items-center gap-1 text-gray-500 text-2xs">
                             <span className={`w-2 h-2 rounded-sm ${TYPE_STYLE[a.type] ?? 'bg-gray-400'}`} />{a.type}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap text-2xs">
+                        <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap text-2xs text-left">
                           {carriedIn(a) && <span className="text-gray-300 mr-0.5">◀</span>}
                           {fmtDate(a.startDate)}~{fmtDate(a.endDate)}
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap">
+                        <td className="px-2 py-1.5 whitespace-nowrap text-left">
                           <span className={`text-2xs rounded-full px-2 py-0.5 ${st.bg} ${st.text}`}>{a.status}</span>
                         </td>
-                        <td className="px-2 py-1.5 pr-4 text-gray-400 whitespace-nowrap text-2xs">{a.owner}</td>
+                        <td className="px-2 py-1.5 pr-4 text-gray-400 whitespace-nowrap text-2xs text-left">{a.owner}</td>
                       </tr>
                     )
                   })}
@@ -369,18 +270,18 @@ export function DetailDrawer({ activity, onClose }: { activity: GTMActivity | nu
   const rows: [string, string][] = [
     ['권역', activity.region],
     ['브랜드', activity.brand],
-    ['주관', activity.org],
-    ['채널', activity.channel],
-    ['Retail', activity.retail],
-    ['매체', activity.media],
-    ['목적/유형', activity.type],
-    ['상품', activity.product + (activity.hero ? ' ★주력' : '')],
-    ['활동', activity.activity],
+    ['유형', activity.type],
+    ['EC/Retail', activity.retail],
+    ['채널(파생)', activity.channel],
+    ['제품', activity.product + (activity.hero ? ' ★주력' : '')],
+    ['활동내용', activity.activity],
     ['건수', activity.count],
-    ['기간', `${fmtDate(activity.startDate)} ~ ${fmtDate(activity.endDate)}`],
+    ['기간', `${fmtYearMonth(activity.startDate)} ~ ${fmtYearMonth(activity.endDate)}`],
+    ['상태', activity.status],
     ['예산', activity.budget],
-    ['담당', `${activity.team} / ${activity.owner}`],
+    ['담당', [activity.team, activity.owner].filter(Boolean).join(' / ')],
   ]
+  const m = activity.meta
   return (
     <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/20" />
@@ -389,7 +290,9 @@ export function DetailDrawer({ activity, onClose }: { activity: GTMActivity | nu
           <div>
             <span className={`text-2xs rounded-full px-2 py-0.5 ${st.bg} ${st.text}`}>{activity.status}</span>
             <h2 className="text-base font-bold text-gray-800 mt-1.5">{activity.title}</h2>
-            <p className="text-2xs text-gray-400 mt-0.5">{activity.id}</p>
+            <p className="text-2xs text-gray-400 mt-0.5">
+              {activity.source === 'BM' ? 'BM 신상품 기획' : '활동'} · {activity.region}
+            </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
         </div>
@@ -400,14 +303,20 @@ export function DetailDrawer({ activity, onClose }: { activity: GTMActivity | nu
               <span className="text-gray-700">{v}</span>
             </div>
           ))}
-          {activity.issue && (
-            <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
-              <p className="text-2xs text-red-500 font-medium mb-0.5">
-                이슈 {activity.riskLevel && `· 위험도 ${(RISK_STYLE[activity.riskLevel] ?? {label:''}).label}`}
-              </p>
-              <p className="text-xs text-red-800">{activity.issue}</p>
+
+          {activity.source === 'BM' && m && (
+            <div className="mt-3 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2.5 space-y-1.5">
+              <p className="text-2xs text-blue-600 font-semibold">신상품 기획 (BM)</p>
+              {([['출시가', m.price], ['핵심성분', m.ingredient], ['USP', m.usp], ['초도물량', m.moq], ['리뉴얼', m.renewal], ['비고', m.note]] as [string, string][])
+                .map(([k, v]) => v && (
+                  <div key={k} className="flex text-xs">
+                    <span className="w-16 shrink-0 text-blue-400">{k}</span>
+                    <span className="text-blue-900">{v}</span>
+                  </div>
+                ))}
             </div>
           )}
+
           {activity.updatedAt && (
             <p className="text-2xs text-gray-400 pt-2">
               최종 수정 {fmtRelTime(activity.updatedAt)} {activity.updatedBy && `· ${activity.updatedBy}`}

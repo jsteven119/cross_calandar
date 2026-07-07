@@ -6,12 +6,13 @@ import { BRANDS } from '@/lib/types'
 export interface FilterState {
   regions: Set<string>
   brands: Set<string>
-  retails: Set<string>     // 리테일 (Qoo10/RKT/@cosme …)
+  retails: Set<string>     // EC/Retail (Qoo10/RKT/@cosme …)
   types: Set<string>
+  teams: Set<string>       // 담당팀
   statuses: Set<string>
   months: Set<number>      // 시작월 (1~12)
   heroOnly: boolean
-  product: string | null   // 상품 렌즈 (선택 시 해당 상품만 강조)
+  product: string | null   // 제품 렌즈 (충돌 클릭 시 설정)
 }
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
   setFilter: (f: FilterState) => void
 }
 
-const TYPES: ActivityType[] = ['프로모션', '바이럴', '신상품', '상시']
+const TYPES: ActivityType[] = ['신상품', '프로모션', '마케팅']
 const STATUSES: ActivityStatus[] = ['기획', '확정', '진행중', '완료', '보류', '취소']
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -40,13 +41,11 @@ function toggle(set: Set<string>, v: string): Set<string> {
   n.has(v) ? n.delete(v) : n.add(v)
   return n
 }
-
 function toggleNum(set: Set<number>, v: number): Set<number> {
   const n = new Set(set)
   n.has(v) ? n.delete(v) : n.add(v)
   return n
 }
-
 function startMonth(d: string): number | null {
   const m = (d || '').match(/^\d{4}\D+(\d{1,2})/)
   return m ? +m[1] : null
@@ -62,23 +61,17 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 export function Filters({ data, filter, setFilter }: Props) {
-  const products = Array.from(new Set(data.activities.map(a => a.product).filter(Boolean))).sort()
   const retails = Array.from(new Set(data.activities.map(a => a.retail).filter(Boolean))).sort()
-  // 데이터에 실제로 존재하는 시작월만 칩으로 노출
+  const teams = Array.from(new Set(data.activities.map(a => a.team).filter(Boolean))).sort()
   const months = Array.from(new Set(data.activities.map(a => startMonth(a.startDate)).filter((m): m is number => m !== null))).sort((a, b) => a - b)
-  const hasFilter = filter.regions.size || filter.brands.size || filter.retails.size || filter.types.size || filter.statuses.size || filter.months.size || filter.heroOnly || filter.product
+  const hasFilter = filter.regions.size || filter.brands.size || filter.retails.size || filter.types.size || filter.teams.size || filter.statuses.size || filter.months.size || filter.heroOnly || filter.product
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg px-3 py-3 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-gray-700">필터</span>
         {hasFilter ? (
-          <button
-            onClick={() => setFilter(emptyFilter())}
-            className="text-2xs text-gray-400 hover:text-gray-600"
-          >
-            초기화
-          </button>
+          <button onClick={() => setFilter(emptyFilter())} className="text-2xs text-gray-400 hover:text-gray-600">초기화</button>
         ) : null}
       </div>
 
@@ -106,8 +99,16 @@ export function Filters({ data, filter, setFilter }: Props) {
         ))}
       </Section>
 
+      <Section label="유형">
+        {TYPES.map(t => (
+          <Chip key={t} active={filter.types.has(t)} onClick={() => setFilter({ ...filter, types: toggle(filter.types, t) })}>
+            {t}
+          </Chip>
+        ))}
+      </Section>
+
       {retails.length > 0 && (
-        <Section label="리테일">
+        <Section label="EC · Retail">
           {retails.map(rt => (
             <Chip key={rt} active={filter.retails.has(rt)} onClick={() => setFilter({ ...filter, retails: toggle(filter.retails, rt) })}>
               {rt}
@@ -116,13 +117,15 @@ export function Filters({ data, filter, setFilter }: Props) {
         </Section>
       )}
 
-      <Section label="유형">
-        {TYPES.map(t => (
-          <Chip key={t} active={filter.types.has(t)} onClick={() => setFilter({ ...filter, types: toggle(filter.types, t) })}>
-            {t}
-          </Chip>
-        ))}
-      </Section>
+      {teams.length > 0 && (
+        <Section label="담당팀">
+          {teams.map(tm => (
+            <Chip key={tm} active={filter.teams.has(tm)} onClick={() => setFilter({ ...filter, teams: toggle(filter.teams, tm) })}>
+              {tm}
+            </Chip>
+          ))}
+        </Section>
+      )}
 
       <Section label="상태">
         {STATUSES.map(s => (
@@ -132,7 +135,7 @@ export function Filters({ data, filter, setFilter }: Props) {
         ))}
       </Section>
 
-      <div className="pt-2 border-t border-gray-100 space-y-2">
+      <div className="pt-2 border-t border-gray-100">
         <label className="flex items-center gap-1.5 text-2xs text-gray-600 cursor-pointer">
           <input
             type="checkbox"
@@ -142,22 +145,11 @@ export function Filters({ data, filter, setFilter }: Props) {
           />
           ★ 주력상품만
         </label>
-        <div className="space-y-1">
-          <p className="text-2xs font-semibold text-gray-400 uppercase tracking-wide">상품 렌즈</p>
-          <select
-            value={filter.product ?? ''}
-            onChange={e => setFilter({ ...filter, product: e.target.value || null })}
-            className="w-full text-2xs border border-gray-200 rounded px-2 py-1.5"
-          >
-            <option value="">전체 보기</option>
-            {products.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
       </div>
     </div>
   )
 }
 
 export function emptyFilter(): FilterState {
-  return { regions: new Set(), brands: new Set(), retails: new Set(), types: new Set(), statuses: new Set(), months: new Set(), heroOnly: false, product: null }
+  return { regions: new Set(), brands: new Set(), retails: new Set(), types: new Set(), teams: new Set(), statuses: new Set(), months: new Set(), heroOnly: false, product: null }
 }
