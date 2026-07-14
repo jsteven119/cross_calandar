@@ -11,7 +11,7 @@ import { retailChannel } from './ui'
 const DEFAULT_SHEET_ID = '1Q_JypC7SG9NuvD_gzwFSioWlUAo2jJJVwya-NPkIShI'
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID
 
-const ACTIVITY_TABS: Region[] = ['국내', '미국', '중국', '일본']
+const ACTIVITY_TABS: Region[] = ['국내', '미국', '영국', '중국', '일본']
 const BM_TAB = 'BM'
 const FOCUS_TAB = '주력상품'
 const CHANGELOG_TAB = '_변경로그'
@@ -19,8 +19,9 @@ const CHANGELOG_TAB = '_변경로그'
 const DEFAULT_REGIONS: RegionMeta[] = [
   { name: '국내', color: '#ec4899', order: 0 },
   { name: '미국', color: '#3b82f6', order: 1 },
-  { name: '중국', color: '#ef4444', order: 2 },
-  { name: '일본', color: '#8b5cf6', order: 3 },
+  { name: '영국', color: '#0ea5e9', order: 2 },
+  { name: '중국', color: '#ef4444', order: 3 },
+  { name: '일본', color: '#8b5cf6', order: 4 },
 ]
 
 // ── 헤더 별칭 — 신(v2) 라벨 전용. 구 라벨(매체/미디어/목적/이슈/리스크/채널/시작일/종료일)은 제거 ──

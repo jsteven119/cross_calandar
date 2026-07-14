@@ -9,7 +9,7 @@ const BRAND_COLOR: Record<string, string> = {
 }
 const brandColor = (b: string) => BRAND_COLOR[b] || '#94a3b8'
 const BRAND_ORDER = ['바이오힐보', '웨이크메이크', '컬러그램', '브링그린', '올리브영']
-const REGION_ORDER = ['국내', '일본', '중국', '미국', '전사']
+const REGION_ORDER = ['국내', '일본', '중국', '미국', '영국', '전사']
 const CAT_ORDER = ['상품', '온라인', '오프라인'] as const
 
 function ym(d: string): { y: number; m: number; key: string } | null {
